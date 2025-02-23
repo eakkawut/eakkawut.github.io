@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Time.is Clone (Serverless)</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+    .container {
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      text-align: center;
+    }
+    .offset-info {
+      font-size: 1.2em;
+      margin-bottom: 0.5em;
+      color: #555;
+    }
+    .accuracy-info {
+      font-size: 0.9em;
+      color: #999;
+      margin-bottom: 1em;
+    }
+    .main-time {
+      font-size: 6em;
+      font-weight: bold;
+      margin: 0.2em 0;
+    }
+    .date-info {
+      font-size: 1.2em;
+      margin-bottom: 1em;
+      color: #666;
+    }
+    .cities {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin-top: 2em;
+    }
+    .city {
+      text-align: center;
+      font-size: 1em;
+      background: #fff;
+      padding: 10px 15px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .city-name {
+      font-weight: bold;
+      margin-bottom: 0.5em;
+    }
+    .city-time {
+      font-size: 1.2em;
+    }
+    .small-text {
+      font-size: 0.8em;
+      color: #777;
+      margin-top: 1em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="offset-info" class="offset-info">Fetching official time…</div>
+    <div id="accuracy-info" class="accuracy-info"></div>
+
+    <div id="main-time" class="main-time">00:00:00</div>
+    <div id="date-info" class="date-info">Date</div>
+
+    <div class="cities">
+      <div class="city">
+        <div class="city-name">Los Angeles</div>
+        <div class="city-time" id="time-la">00:00</div>
+      </div>
+      <div class="city">
+        <div class="city-name">New York</div>
+        <div class="city-time" id="time-ny">00:00</div>
+      </div>
+      <div class="city">
+        <div class="city-name">London</div>
+        <div class="city-time" id="time-lon">00:00</div>
+      </div>
+      <div class="city">
+        <div class="city-name">Paris</div>
+        <div class="city-time" id="time-par">00:00</div>
+      </div>
+      <div class="city">
+        <div class="city-name">Bangkok</div>
+        <div class="city-time" id="time-bkk">00:00</div>
+      </div>
+      <div class="city">
+        <div class="city-name">Beijing</div>
+        <div class="city-time" id="time-bj">00:00</div>
+      </div>
+      <div class="city">
+        <div class="city-name">Tokyo</div>
+        <div class="city-time" id="time-tok">00:00</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Global offset: officialTime - localTime (in ms)
+    let timeOffsetMs = 0;
+    // Assume a rough accuracy; with this API we can't measure round-trip time precisely
+    let synchronizationAccuracyMs = 250;
+
+    // Helper: Zero-pad numbers to 2 digits
+    function zeroPad(num) {
+      return num < 10 ? '0' + num : num;
+    }
+
+    // Update the offset and accuracy display text
+    function updateOffsetDisplay() {
+      const offsetSeconds = timeOffsetMs / 1000;
+      let offsetText = '';
+      if (offsetSeconds > 0) {
+        offsetText = `Your clock is ${offsetSeconds.toFixed(1)} seconds behind.`;
+      } else {
+        offsetText = `Your clock is ${Math.abs(offsetSeconds).toFixed(1)} seconds ahead.`;
+      }
+      document.getElementById('offset-info').textContent = offsetText;
+
+      const accuracySeconds = synchronizationAccuracyMs / 1000;
+      document.getElementById('accuracy-info').textContent =
+        `Accuracy of synchronization was ±${accuracySeconds.toFixed(2)} seconds.`;
+    }
+
+    // Returns the current "synchronized" time based on the official time offset
+    function getSyncedLocalTime() {
+      return new Date(Date.now() + timeOffsetMs);
+    }
+
+    // Update the main clock, date, and city times
+    function renderTime() {
+      const now = getSyncedLocalTime();
+      const hours = zeroPad(now.getHours());
+      const minutes = zeroPad(now.getMinutes());
+      const seconds = zeroPad(now.getSeconds());
+
+      document.getElementById('main-time').textContent = `${hours}:${minutes}:${seconds}`;
+
+      const dateOptions = { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      };
+      document.getElementById('date-info').textContent = now.toLocaleDateString(undefined, dateOptions);
+
+      // Update times for several cities (using fixed UTC offsets; adjust for DST as needed)
+      updateCityTime('time-la', -8); // Los Angeles (UTC-8)
+      updateCityTime('time-ny', -5); // New York (UTC-5)
+      updateCityTime('time-lon', 0);  // London (UTC+0)
+      updateCityTime('time-par', 1);  // Paris (UTC+1)
+      updateCityTime('time-bkk', 7);  // Bkk (UTC+7)
+      updateCityTime('time-bj', 8);   // Beijing (UTC+8)
+      updateCityTime('time-tok', 9);  // Tokyo (UTC+9)
+    }
+
+    // Helper to update each city's time based on its UTC offset (in hours)
+    function updateCityTime(elementId, utcOffset) {
+      const now = getSyncedLocalTime();
+      // Convert local time to UTC in ms:
+      const utcMs = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
+      // Add the city's UTC offset (in ms):
+      const cityTimeMs = utcMs + (utcOffset * 3600 * 1000);
+      const cityDate = new Date(cityTimeMs);
+
+      const hh = zeroPad(cityDate.getHours());
+      const mm = zeroPad(cityDate.getMinutes());
+      document.getElementById(elementId).textContent = `${hh}:${mm}`;
+    }
+
+    // Start the clock update every second
+    setInterval(renderTime, 1000);
+    renderTime();
+
+    // --- Fetch Official Time Using timeapi.io ---
+    // 1. Get the client's public IP address
+    fetch('https://api.ipify.org?format=json')
+      .then(response => response.json())
+      .then(ipData => {
+        const clientIp = ipData.ip;
+        // 2. Use the public API to fetch current time based on client IP
+        const timeApiUrl = `https://timeapi.io/api/time/current/ip?ipAddress=${clientIp}`;
+        return fetch(timeApiUrl);
+      })
+      .then(response => response.json())
+      .then(timeData => {
+        // The API returns an object with a dateTime string (e.g., "2025-02-23T20:54:40")
+        // Parse that string into a JavaScript Date object.
+        const officialTimeStr = timeData.dateTime;
+        const officialTime = new Date(officialTimeStr);
+
+        // Calculate the offset (official time minus local system time)
+        timeOffsetMs = officialTime.getTime() - Date.now();
+
+        updateOffsetDisplay();
+      })
+      .catch(error => {
+        console.error('Error fetching official time:', error);
+        document.getElementById('offset-info').textContent = 'Error fetching official time.';
+      });
+  </script>
+</body>
+</html>
